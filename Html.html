@@ -1,0 +1,663 @@
+function flightSheet(id) {
+  const t = state.trip;
+  const ex = id ? t.flights.find(x => x.id === id) : null;
+  const isNew = !ex;
+  const f = ex || { direction: t.flights.some(x => x.direction === 'outbound') ? 'return' : 'outbound', airline: '', flightNo: '', from: '', fromName: '', to: '', toName: '', depDate: t.startDate, depTime: '08:00', depTz: 'Asia/Bangkok', arrDate: t.startDate, arrTime: '14:00', arrTz: t.timezone, terminal: '', gate: '', seat: '', cabin: 'Economy', pnr: '', price: '', currency: 'THB', color: '#1C3F94' };
+  openSheet({
+    title: isNew ? 'เพิ่มเที่ยวบิน' : 'แก้ไขเที่ยวบิน',
+    body:
+      F.group([
+        F.select('ประเภท', 'direction', f.direction, [['outbound', 'ขาไป'], ['return', 'ขากลับ'], ['connecting', 'ต่อเครื่อง/ภายในประเทศ']]),
+        F.text('สายการบิน', 'airline', f.airline, 'Thai Airways'),
+        F.text('เลขไฟลต์', 'flightNo', f.flightNo, 'TG 682', 'text', 'autocapitalize="characters"'),
+        F.color('สีบัตร', 'color', f.color)
+      ], 'เที่ยวบิน') +
+      F.group([
+        F.text('ต้นทาง (รหัส)', 'from', f.from, 'BKK', 'text', 'autocapitalize="characters" maxlength="4"'),
+        F.text('ชื่อสนามบิน', 'fromName', f.fromName, 'Suvarnabhumi'),
+        F.text('ปลายทาง (รหัส)', 'to', f.to, 'HND', 'text', 'autocapitalize="characters" maxlength="4"'),
+        F.text('ชื่อสนามบิน', 'toName', f.toName, 'Tokyo Haneda')
+      ], 'เส้นทาง') +
+      F.group([
+        F.text('วันที่', 'depDate', f.depDate, '', 'date'),
+        F.text('เวลา', 'depTime', f.depTime, '', 'time'),
+        F.select('เขตเวลา', 'depTz', f.depTz, tzOptions(f.depTz))
+      ], 'ออกเดินทาง', 'ใส่เวลาท้องถิ่นของสนามบินต้นทาง') +
+      F.group([
+        F.text('วันที่', 'arrDate', f.arrDate, '', 'date'),
+        F.text('เวลา', 'arrTime', f.arrTime, '', 'time'),
+        F.select('เขตเวลา', 'arrTz', f.arrTz, tzOptions(f.arrTz))
+      ], 'ถึงปลายทาง', 'ใส่เวลาท้องถิ่นของสนามบินปลายทาง ระบบจะแปลงเวลาให้ถูกต้องในปฏิทิน') +
+      F.group([
+        F.text('อาคาร (Terminal)', 'terminal', f.terminal, 'เช่น 3'),
+        F.text('Gate', 'gate', f.gate, 'เช่น C3'),
+        F.text('ที่นั่ง', 'seat', f.seat, 'เช่น 32A', 'text', 'autocapitalize="characters"'),
+        F.select('ชั้นโดยสาร', 'cabin', f.cabin, [['Economy', 'Economy'], ['Premium Economy', 'Premium Economy'], ['Business', 'Business'], ['First', 'First']]),
+        F.text('Booking Ref', 'pnr', f.pnr, 'เช่น 7XKQ2M', 'text', 'autocapitalize="characters"')
+      ], 'รายละเอียดบัตรโดยสาร') +
+      F.group([F.money('ราคา', 'price', f.price, 'currency', f.currency)], 'ราคา', 'ระบบรวมเข้าหน้างบประมาณให้อัตโนมัติ'),
+    onSave: fd => {
+      if (!fd.flightNo.trim() || !fd.from.trim() || !fd.to.trim()) { toast('กรุณากรอกเลขไฟลต์ ต้นทาง และปลายทาง'); return false; }
+      if (!fd.depDate || !fd.depTime) { toast('กรุณาระบุวันและเวลาออกเดินทาง'); return false; }
+      const data = {
+        direction: fd.direction, airline: fd.airline.trim(), flightNo: fd.flightNo.trim().toUpperCase(), color: fd.color,
+        from: fd.from.trim().toUpperCase(), fromName: fd.fromName.trim(), to: fd.to.trim().toUpperCase(), toName: fd.toName.trim(),
+        depDate: fd.depDate, depTime: fd.depTime, depTz: fd.depTz,
+        arrDate: fd.arrDate || fd.depDate, arrTime: fd.arrTime, arrTz: fd.arrTz,
+        terminal: fd.terminal.trim(), gate: fd.gate.trim(), seat: fd.seat.trim().toUpperCase(), cabin: fd.cabin, pnr: fd.pnr.trim().toUpperCase(),
+        price: fd.price === '' ? 0 : Number(fd.price), currency: fd.currency
+      };
+      if (isNew) state.trip.flights.push({ id: uid(), ...data });
+      else { const x = state.trip.flights.find(y => y.id === id); if (x) Object.assign(x, data); }
+      state.seg.book = 0;
+      commit();
+      toast(isNew ? 'เพิ่มเที่ยวบินแล้ว' : 'บันทึกแล้ว');
+    },
+    onDelete: isNew ? null : () => { state.trip.flights = state.trip.flights.filter(x => x.id !== id); commit(); toast('ลบเที่ยวบินแล้ว'); },
+    deleteLabel: 'ลบเที่ยวบินนี้'
+  });
+}
+
+function hotelSheet(id) {
+  const t = state.trip;
+  const ex = id ? t.hotels.find(x => x.id === id) : null;
+  const isNew = !ex;
+  const h = ex || { name: '', localName: '', address: '', localAddress: '', checkIn: t.startDate, checkInTime: '15:00', checkOut: t.endDate, checkOutTime: '11:00', confirmation: '', phone: '', price: '', currency: 'THB', mapUrl: '', note: '' };
+  openSheet({
+    title: isNew ? 'เพิ่มที่พัก' : 'แก้ไขที่พัก',
+    body:
+      F.group([
+        F.text('ชื่อโรงแรม', 'name', h.name, 'Hotel Gracery Shinjuku'),
+        F.text('ภาษาท้องถิ่น', 'localName', h.localName, 'ホテルグレイスリー新宿')
+      ], 'ที่พัก') +
+      F.group([
+        F.text('ที่อยู่', 'address', h.address, 'Address (English)'),
+        F.text('ภาษาท้องถิ่น', 'localAddress', h.localAddress, 'ที่อยู่ภาษาท้องถิ่น')
+      ], 'ที่อยู่', 'ชื่อและที่อยู่ภาษาท้องถิ่นจะขยายเต็มจอเมื่อแตะ ใช้ยื่นให้คนขับแท็กซี่ดูได้') +
+      F.group([
+        F.text('เช็กอิน', 'checkIn', h.checkIn, '', 'date'),
+        F.text('เวลา', 'checkInTime', h.checkInTime, '', 'time'),
+        F.text('เช็กเอาต์', 'checkOut', h.checkOut, '', 'date'),
+        F.text('เวลา', 'checkOutTime', h.checkOutTime, '', 'time')
+      ], 'วันที่เข้าพัก') +
+      F.group([
+        F.text('เลขยืนยัน', 'confirmation', h.confirmation, 'เช่น GRC-58213', 'text', 'autocapitalize="characters"'),
+        F.text('โทรศัพท์', 'phone', h.phone, '+81 3-...', 'tel'),
+        F.money('ราคา', 'price', h.price, 'currency', h.currency),
+        F.text('ลิงก์แผนที่', 'mapUrl', h.mapUrl, 'https://maps.apple.com/...', 'url', 'autocapitalize="off"')
+      ], 'การจอง', 'เว้นลิงก์แผนที่ว่างไว้ได้ ระบบจะค้นหาจากที่อยู่ภาษาท้องถิ่นให้') +
+      F.group([F.area('note', h.note, 'เช่น ประเภทห้อง / อาหารเช้า / รหัส Wi-Fi')], 'โน้ตย่อ'),
+    onSave: fd => {
+      if (!fd.name.trim()) { toast('กรุณากรอกชื่อโรงแรม'); return false; }
+      if (fd.checkIn && fd.checkOut && fd.checkOut < fd.checkIn) { toast('วันเช็กเอาต์ต้องไม่ก่อนวันเช็กอิน'); return false; }
+      const data = {
+        name: fd.name.trim(), localName: fd.localName.trim(), address: fd.address.trim(), localAddress: fd.localAddress.trim(),
+        checkIn: fd.checkIn, checkInTime: fd.checkInTime, checkOut: fd.checkOut, checkOutTime: fd.checkOutTime,
+        confirmation: fd.confirmation.trim(), phone: fd.phone.trim(), price: fd.price === '' ? 0 : Number(fd.price), currency: fd.currency,
+        mapUrl: fd.mapUrl.trim(), note: fd.note.trim()
+      };
+      if (isNew) state.trip.hotels.push({ id: uid(), ...data });
+      else { const x = state.trip.hotels.find(y => y.id === id); if (x) Object.assign(x, data); }
+      state.trip.hotels.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+      state.seg.book = 1;
+      commit();
+      toast(isNew ? 'เพิ่มที่พักแล้ว' : 'บันทึกแล้ว');
+    },
+    onDelete: isNew ? null : () => { state.trip.hotels = state.trip.hotels.filter(x => x.id !== id); commit(); toast('ลบที่พักแล้ว'); },
+    deleteLabel: 'ลบที่พักนี้'
+  });
+}
+
+function expenseSheet(id) {
+  const t = state.trip;
+  const ex = id ? t.expenses.find(x => x.id === id) : null;
+  const isNew = !ex;
+  const today = todayInTz(t.timezone);
+  const e = ex || { title: '', category: 'food', amount: '', currency: t.localCurrency || 'THB', date: (today >= t.startDate && today <= t.endDate) ? today : t.startDate, note: '' };
+  openSheet({
+    title: isNew ? 'บันทึกค่าใช้จ่าย' : 'แก้ไขค่าใช้จ่าย',
+    body:
+      F.group([
+        F.text('รายการ', 'title', e.title, 'เช่น ค่ารถไฟ / ของฝาก'),
+        F.money('จำนวนเงิน', 'amount', e.amount, 'currency', e.currency),
+        F.select('หมวดหมู่', 'category', e.category, Object.entries(EXP_CATS).map(([k, v]) => [k, v.label])),
+        F.text('วันที่', 'date', e.date, '', 'date')
+      ], 'รายละเอียด', 'แปลงเป็นเงินบาทตามอัตราแลกเปลี่ยนที่ตั้งไว้ให้อัตโนมัติ') +
+      F.group([F.area('note', e.note, 'หมายเหตุ (ถ้ามี)', 2)], 'โน้ต'),
+    onSave: fd => {
+      if (!fd.title.trim()) { toast('กรุณากรอกชื่อรายการ'); return false; }
+      if (fd.amount === '' || isNaN(Number(fd.amount))) { toast('กรุณากรอกจำนวนเงิน'); return false; }
+      const data = { title: fd.title.trim(), amount: Number(fd.amount), currency: fd.currency, category: fd.category, date: fd.date, note: fd.note.trim() };
+      if (isNew) state.trip.expenses.push({ id: uid(), ...data });
+      else { const x = state.trip.expenses.find(y => y.id === id); if (x) Object.assign(x, data); }
+      state.trip.expenses.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      commit();
+      toast(isNew ? 'บันทึกค่าใช้จ่ายแล้ว' : 'บันทึกแล้ว');
+    },
+    onDelete: isNew ? null : () => { state.trip.expenses = state.trip.expenses.filter(x => x.id !== id); commit(); toast('ลบรายการแล้ว'); }
+  });
+}
+
+function currencyUsage(code) {
+  const t = state.trip;
+  let n = 0;
+  t.days.forEach(d => d.items.forEach(it => { if (it.currency === code) n++; if (it.transit && it.transit.fareCurrency === code) n++; }));
+  t.flights.forEach(f => { if (f.currency === code) n++; });
+  t.hotels.forEach(h => { if (h.currency === code) n++; });
+  t.expenses.forEach(e => { if (e.currency === code) n++; });
+  return n;
+}
+function renameCurrency(oldC, newC) {
+  const t = state.trip;
+  t.days.forEach(d => d.items.forEach(it => { if (it.currency === oldC) it.currency = newC; if (it.transit && it.transit.fareCurrency === oldC) it.transit.fareCurrency = newC; }));
+  t.flights.forEach(f => { if (f.currency === oldC) f.currency = newC; });
+  t.hotels.forEach(h => { if (h.currency === oldC) h.currency = newC; });
+  t.expenses.forEach(e => { if (e.currency === oldC) e.currency = newC; });
+  if (t.localCurrency === oldC) t.localCurrency = newC;
+}
+function currencySheet(code) {
+  const t = state.trip;
+  const ex = code ? t.currencies.find(c => c.code === code) : null;
+  const isNew = !ex;
+  const c = ex || { code: '', symbol: '', rate: '' };
+  openSheet({
+    title: isNew ? 'เพิ่มสกุลเงิน' : `สกุลเงิน ${c.code}`,
+    body: F.group([
+      F.text('รหัส', 'code', c.code, 'เช่น JPY, USD, KRW', 'text', 'autocapitalize="characters" maxlength="3"'),
+      F.text('สัญลักษณ์', 'symbol', c.symbol, 'เช่น ¥, $, ₩'),
+      F.text('1 หน่วย = ? บาท', 'rate', c.rate, '0.23', 'number', 'inputmode="decimal" step="any"')
+    ], 'อัตราแลกเปลี่ยน', 'ตัวอย่าง: 1 JPY ≈ 0.23 บาท · ปรับตามเรตที่แลกจริงเพื่อให้ยอดแม่นยำ'),
+    onSave: fd => {
+      const nc = fd.code.trim().toUpperCase();
+      const rate = Number(fd.rate);
+      if (!/^[A-Z]{3}$/.test(nc)) { toast('รหัสสกุลเงินต้องเป็นตัวอักษร 3 ตัว'); return false; }
+      if (nc === 'THB') { toast('THB เป็นสกุลเงินหลักอยู่แล้ว'); return false; }
+      if (!(rate > 0)) { toast('กรุณากรอกอัตราแลกเปลี่ยนที่มากกว่า 0'); return false; }
+      if ((isNew || nc !== code) && state.trip.currencies.some(x => x.code === nc)) { toast('มีสกุลเงินนี้อยู่แล้ว'); return false; }
+      if (isNew) state.trip.currencies.push({ code: nc, symbol: fd.symbol.trim(), rate });
+      else {
+        const x = state.trip.currencies.find(y => y.code === code);
+        if (x) { if (nc !== code) renameCurrency(code, nc); Object.assign(x, { code: nc, symbol: fd.symbol.trim(), rate }); }
+      }
+      commit();
+      toast('บันทึกอัตราแลกเปลี่ยนแล้ว');
+    },
+    onDelete: isNew ? null : () => {
+      const used = currencyUsage(code);
+      if (used && !confirm(`มี ${used} รายการที่ใช้สกุลเงิน ${code}\nหากลบ รายการเหล่านั้นจะถูกเปลี่ยนเป็น THB (ตัวเลขเดิม) ต้องการลบหรือไม่?`)) return;
+      if (used) renameCurrency(code, 'THB');
+      state.trip.currencies = state.trip.currencies.filter(x => x.code !== code);
+      commit();
+      closeSheet();
+      toast(`ลบ ${code} แล้ว`);
+    },
+    deleteLabel: 'ลบสกุลเงินนี้'
+  });
+}
+
+function budgetSheet() {
+  openSheet({
+    title: 'งบประมาณทริป',
+    body: F.group([F.text('งบทั้งหมด (บาท)', 'budget', state.trip.budget || '', '0', 'number', 'inputmode="decimal" step="any"')], 'งบประมาณ', 'ใช้คำนวณเปอร์เซ็นต์ในวงแหวนสรุปค่าใช้จ่าย'),
+    onSave: fd => {
+      const b = Number(fd.budget);
+      if (fd.budget !== '' && (isNaN(b) || b < 0)) { toast('จำนวนเงินไม่ถูกต้อง'); return false; }
+      state.trip.budget = fd.budget === '' ? 0 : b;
+      commit();
+      toast('บันทึกงบประมาณแล้ว');
+    }
+  });
+}
+
+function tripSheet() {
+  const t = state.trip;
+  openSheet({
+    title: 'ข้อมูลทริป',
+    body:
+      F.group([
+        F.text('ชื่อทริป', 'name', t.name, 'เช่น Tokyo Spring Escape'),
+        F.text('อีโมจิ', 'emoji', t.emoji, '🌸'),
+        F.text('ปลายทาง', 'destination', t.destination, 'เช่น โตเกียว, ญี่ปุ่น')
+      ], 'ทริป') +
+      F.group([
+        F.text('วันเริ่ม', 'startDate', t.startDate, '', 'date'),
+        F.text('วันสิ้นสุด', 'endDate', t.endDate, '', 'date'),
+        F.select('เขตเวลา', 'timezone', t.timezone, tzOptions(t.timezone))
+      ], 'วันเดินทาง', 'เวลากิจกรรมทุกรายการจะอิงเขตเวลาปลายทางนี้ ปฏิทินบน iPhone จะแสดงเวลาตรงกับเวลาท้องถิ่น') +
+      F.group([
+        F.select('สกุลเงินท้องถิ่น', 'localCurrency', t.localCurrency, ['THB', ...t.currencies.map(c => c.code)].map(c => [c, c])),
+        F.text('งบ (บาท)', 'budget', t.budget || '', '0', 'number', 'inputmode="decimal" step="any"')
+      ], 'เงิน') +
+      F.group([F.text('ประโยค', 'taxiPhrase', t.taxiPhrase, 'ここへ行ってください')], 'ประโยคบนการ์ดแท็กซี่', 'แสดงเหนือชื่อสถานที่ในโหมดยื่นให้คนขับแท็กซี่ดู'),
+    onSave: fd => {
+      if (!fd.name.trim()) { toast('กรุณากรอกชื่อทริป'); return false; }
+      const start = fd.startDate, end = fd.endDate;
+      if (!start || !end || end < start) { toast('วันสิ้นสุดต้องไม่ก่อนวันเริ่ม'); return false; }
+      const n = diffDays(start, end) + 1;
+      if (n > 60) { toast('ทริปยาวได้ไม่เกิน 60 วัน'); return false; }
+      const old = state.trip.days;
+      const dropped = old.slice(n).reduce((s, d) => s + d.items.length, 0);
+      if (dropped && !confirm(`ช่วงวันที่ใหม่สั้นลง กิจกรรม ${dropped} รายการในวันท้ายๆ จะถูกลบ\nต้องการดำเนินการต่อหรือไม่?`)) return false;
+      state.trip.days = Array.from({ length: n }, (_, i) => old[i] ? { ...old[i], date: addDays(start, i) } : { id: uid(), date: addDays(start, i), title: '', items: [] });
+      Object.assign(state.trip, {
+        name: fd.name.trim(), emoji: fd.emoji.trim(), destination: fd.destination.trim(),
+        startDate: start, endDate: end, timezone: fd.timezone, localCurrency: fd.localCurrency,
+        budget: fd.budget === '' ? 0 : Number(fd.budget) || 0, taxiPhrase: fd.taxiPhrase.trim()
+      });
+      if (state.dayIdx >= n) state.dayIdx = n - 1;
+      commit();
+      toast('บันทึกข้อมูลทริปแล้ว');
+    }
+  });
+}
+
+function checkCatSheet() {
+  const group = state.seg.check === 0 ? 'packing' : 'todo';
+  openSheet({
+    title: 'หมวดหมู่ใหม่',
+    body: F.group([
+      F.text('ชื่อหมวดหมู่', 'category', '', group === 'packing' ? 'เช่น อุปกรณ์กล้อง' : 'เช่น ก่อนเดินทาง 1 วัน'),
+      F.text('รายการแรก', 'text', '', 'เช่น แบตสำรองกล้อง')
+    ], group === 'packing' ? 'จัดกระเป๋า' : 'ก่อนเดินทาง'),
+    saveLabel: 'เพิ่ม',
+    onSave: fd => {
+      const cat = fd.category.trim(), text = fd.text.trim();
+      if (!cat || !text) { toast('กรุณากรอกชื่อหมวดหมู่และรายการแรก'); return false; }
+      state.trip.checklist.push({ id: uid(), text, category: cat, done: false, group });
+      commit();
+      toast(`สร้างหมวด "${cat}" แล้ว`);
+    }
+  });
+}
+
+/* =========================================================
+   CHECKLIST HELPERS
+   ========================================================= */
+function addCheckItem(cat) {
+  const input = document.querySelector(`[data-input="add-check"][data-cat="${CSS.escape(cat)}"]`);
+  const text = input ? input.value.trim() : '';
+  if (!text) { if (input) input.focus(); return; }
+  state.trip.checklist.push({ id: uid(), text, category: cat, done: false, group: state.seg.check === 0 ? 'packing' : 'todo' });
+  state.focusCat = cat;
+  commit();
+}
+
+/* =========================================================
+   THEME, SCROLL & DAY STRIP
+   ========================================================= */
+function applyThemeMeta() {
+  const dark = document.documentElement.classList.contains('dark');
+  const m = $('#themeColorMeta');
+  if (m) m.setAttribute('content', dark ? '#000000' : '#F2F2F7');
+}
+function setDark(on, persist = true) {
+  document.documentElement.classList.toggle('dark', on);
+  if (persist) localStorage.setItem(LS.theme, on ? 'dark' : 'light');
+  applyThemeMeta();
+  render();
+}
+function onScroll() {
+  const sc = $('#scroller');
+  const y = sc ? sc.scrollTop : 0;
+  const show = y > 44;
+  $('#navSmallTitle').style.opacity = show ? '1' : '0';
+  $('#navbar').style.borderBottomColor = show ? 'var(--sep)' : 'transparent';
+}
+function centerDayStrip(smooth = true) {
+  const strip = $('#dayStrip');
+  const active = strip && strip.querySelector('[data-day-active]');
+  if (!strip || !active) return;
+  const left = active.offsetLeft - strip.clientWidth / 2 + active.offsetWidth / 2;
+  strip.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+}
+function animateSegment(key, from, to) {
+  const btn = document.querySelector(`[data-action="seg"][data-key="${key}"]`);
+  const pill = btn && btn.parentElement.querySelector('[data-pill]');
+  if (!pill) return;
+  pill.style.transition = 'none';
+  pill.style.transform = `translateX(${from * 100}%)`;
+  void pill.offsetWidth;
+  pill.style.transition = '';
+  pill.style.transform = `translateX(${to * 100}%)`;
+}
+
+/* =========================================================
+   ACTIONS (event delegation)
+   ========================================================= */
+const actions = {
+  'tab': el => {
+    state.tab = el.dataset.tab;
+    localStorage.setItem(LS.tab, state.tab);
+    if (!$('#taxiView').classList.contains('hidden')) $('#taxiView').classList.add('hidden');
+    render();
+    $('#scroller').scrollTop = 0;
+    onScroll();
+    if (state.tab === 'itinerary') centerDayStrip(false);
+  },
+  'seg': el => {
+    const key = el.dataset.key, i = Number(el.dataset.i), prev = state.seg[key] ?? 0;
+    if (i === prev) return;
+    state.seg[key] = i;
+    render();
+    animateSegment(key, prev, i);
+  },
+  'day': el => { state.dayIdx = Number(el.dataset.i); render(); centerDayStrip(); },
+  'goto-day': el => {
+    const i = Number(el.dataset.i);
+    if (isNaN(i)) return;
+    state.dayIdx = i; state.tab = 'itinerary';
+    localStorage.setItem(LS.tab, state.tab);
+    render();
+    $('#scroller').scrollTop = 0; onScroll();
+    centerDayStrip(false);
+  },
+
+  /* sheet */
+  'sheet-cancel': () => closeSheet(),
+  'sheet-save': () => doSheetSave(),
+  'sheet-delete': () => {
+    const ctx = sheetCtx;
+    if (!ctx || !ctx.onDelete) return;
+    if (!confirm('ยืนยันการลบ?')) return;
+    ctx.onDelete();
+    if (sheetCtx === ctx) closeSheet();
+  },
+  'pick-mode': el => {
+    const mode = el.dataset.mode;
+    const form = $('#sheetForm');
+    if (!form) return;
+    form.querySelector('input[name="mode"]').value = mode;
+    form.querySelectorAll('[data-action="pick-mode"]').forEach(b => {
+      const on = b.dataset.mode === mode;
+      b.classList.toggle('bg-[#007AFF]', on);
+      b.classList.toggle('text-white', on);
+      b.classList.toggle('bg-white', !on);
+      b.classList.toggle('dark:bg-[#2C2C2E]', !on);
+    });
+  },
+
+  /* itinerary */
+  'add-item': () => itemSheet(null, state.dayIdx),
+  'edit-item': el => itemSheet(el.dataset.id),
+  'del-item': el => deleteItem(el.dataset.id, false),
+  'edit-transit': el => transitSheet(el.dataset.id),
+  'edit-day': () => daySheet(),
+  'map-item': el => { const f = findItem(el.dataset.id); if (f) openUrl(mapLink(f.item.mapUrl, f.item.localName || f.item.name)); },
+  'taxi-item': el => {
+    const f = findItem(el.dataset.id);
+    if (!f) return;
+    const it = f.item;
+    showTaxi({ local: it.localName, address: '', title: it.name, sub: it.transit && it.transit.exit ? `ทางออกใกล้ที่สุด: ${it.transit.exit}` : '', map: mapLink(it.mapUrl, it.localName || it.name) });
+  },
+  'cal-item': el => { const f = findItem(el.dataset.id); if (f) exportCalendar([itemEvent(f.day, f.item)].filter(Boolean), `${slug()}-${f.item.id}.ics`, f.item.name); },
+  'cal-day': () => {
+    const d = state.trip.days[state.dayIdx];
+    if (!d) return;
+    exportCalendar(d.items.map(it => itemEvent(d, it)).filter(Boolean), `${slug()}-day${state.dayIdx + 1}.ics`, `Day ${state.dayIdx + 1}`);
+  },
+  'cal-all': () => exportCalendar(allEvents(), `${slug()}.ics`, 'ทั้งทริป'),
+
+  /* bookings */
+  'add-flight': () => flightSheet(null),
+  'edit-flight': el => flightSheet(el.dataset.id),
+  'del-flight': el => {
+    const f = state.trip.flights.find(x => x.id === el.dataset.id);
+    if (!f || !confirm(`ลบเที่ยวบิน ${f.flightNo} ?`)) return;
+    state.trip.flights = state.trip.flights.filter(x => x.id !== f.id);
+    commit(); toast('ลบเที่ยวบินแล้ว');
+  },
+  'cal-flight': el => {
+    const f = state.trip.flights.find(x => x.id === el.dataset.id);
+    if (f) exportCalendar([flightEvent(f)].filter(Boolean), `flight-${String(f.flightNo).replace(/\s+/g, '')}.ics`, `${f.flightNo}`);
+  },
+  'add-hotel': () => hotelSheet(null),
+  'edit-hotel': el => hotelSheet(el.dataset.id),
+  'del-hotel': el => {
+    const h = state.trip.hotels.find(x => x.id === el.dataset.id);
+    if (!h || !confirm(`ลบที่พัก "${h.name}" ?`)) return;
+    state.trip.hotels = state.trip.hotels.filter(x => x.id !== h.id);
+    commit(); toast('ลบที่พักแล้ว');
+  },
+  'map-hotel': el => { const h = state.trip.hotels.find(x => x.id === el.dataset.id); if (h) openUrl(mapLink(h.mapUrl, h.localAddress || h.localName || h.name)); },
+  'taxi-hotel': el => {
+    const h = state.trip.hotels.find(x => x.id === el.dataset.id);
+    if (h) showTaxi({ local: h.localName || h.name, address: h.localAddress, title: h.name, sub: h.address, map: mapLink(h.mapUrl, h.localAddress || h.localName || h.name) });
+  },
+  'cal-hotel': el => { const h = state.trip.hotels.find(x => x.id === el.dataset.id); if (h) exportCalendar(hotelEvents(h), `hotel-${h.id}.ics`, h.name); },
+
+  /* taxi view */
+  'close-taxi': () => { $('#taxiView').classList.add('hidden'); $('#taxiView').innerHTML = ''; },
+  'taxi-map': () => { if (state.taxiMap) openUrl(state.taxiMap); },
+
+  /* budget */
+  'edit-budget': () => budgetSheet(),
+  'add-expense': () => expenseSheet(null),
+  'edit-expense': el => expenseSheet(el.dataset.id),
+  'add-currency': () => currencySheet(null),
+  'edit-currency': el => currencySheet(el.dataset.code),
+
+  /* checklist */
+  'check-toggle': el => {
+    const c = state.trip.checklist.find(x => x.id === el.dataset.id);
+    if (!c) return;
+    c.done = !c.done;
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+    commit();
+  },
+  'check-del': el => { state.trip.checklist = state.trip.checklist.filter(x => x.id !== el.dataset.id); commit(); },
+  'check-add': el => addCheckItem(el.dataset.cat),
+  'add-check-cat': () => checkCatSheet(),
+
+  /* settings */
+  'edit-trip': () => tripSheet(),
+  'toggle-dark': () => setDark(!document.documentElement.classList.contains('dark')),
+  'fb-connect': async () => {
+    const text = $('#fbConfig').value;
+    const tripId = ($('#fbTripId').value || '').trim().replace(/[\/\s]+/g, '-');
+    if (!tripId) { toast('กรุณาตั้งรหัสทริป'); return; }
+    localStorage.setItem(LS.tripId, tripId);
+    if (!text.trim()) {
+      localStorage.removeItem(LS.fb);
+      await disconnectCloud();
+      setStatus('local');
+      render();
+      toast('ลบการตั้งค่า Firebase แล้ว · ใช้งานแบบ Local Mode');
+      return;
+    }
+    let cfg;
+    try { cfg = parseConfig(text); } catch (e) { toast('รูปแบบ Config ไม่ถูกต้อง'); return; }
+    if (!cfg || !cfg.apiKey || !cfg.projectId) { toast('Config ต้องมี apiKey และ projectId'); return; }
+    localStorage.setItem(LS.fb, JSON.stringify(cfg));
+    toast('กำลังเชื่อมต่อ Firebase…');
+    await connectCloud();
+    render();
+  },
+  'fb-push': async () => {
+    if (!getFbConfig()) { toast('ยังไม่ได้ตั้งค่า Firebase'); return; }
+    if (!navigator.onLine) { toast('ไม่มีอินเทอร์เน็ต · ข้อมูลยังอยู่ในเครื่อง'); return; }
+    if (!cloud.ref) await connectCloud();
+    if (!cloud.ref) { toast('เชื่อมต่อ Cloud ไม่ได้'); return; }
+    state.trip.updatedAt = Date.now();
+    saveLocal();
+    const ok = await pushToCloud();
+    if (ok) toast('☁️ อัปเดตข้อมูลบน Cloud แล้ว');
+  },
+  'fb-disconnect': async () => {
+    if (!getFbConfig() && !cloud.ref) { toast('ยังไม่ได้เชื่อมต่อ Cloud'); return; }
+    if (!confirm('ตัดการเชื่อมต่อ Firebase?\nข้อมูลในเครื่องจะยังอยู่ครบ')) return;
+    await disconnectCloud();
+    localStorage.removeItem(LS.fb);
+    localStorage.removeItem(LS.synced);
+    setStatus('local');
+    render();
+    toast('ตัดการเชื่อมต่อแล้ว · Local Mode');
+  },
+  'export-json': () => {
+    const data = JSON.stringify({ app: 'personal-travel-planner', version: 1, exportedAt: new Date().toISOString(), trip: state.trip }, null, 2);
+    downloadBlob(new Blob([data], { type: 'application/json' }), `${slug()}-backup.json`);
+    toast('ส่งออกไฟล์ JSON แล้ว');
+  },
+  'import-json': () => $('#importFile').click(),
+  'reset-data': () => {
+    if (!confirm('รีเซ็ตเป็นข้อมูลตัวอย่าง?\nข้อมูลทริปปัจจุบันจะถูกแทนที่ (ควรส่งออก JSON ไว้ก่อน)')) return;
+    state.trip = normalize(mockTrip());
+    state.dayIdx = 0;
+    commit();
+    toast('รีเซ็ตข้อมูลแล้ว');
+  }
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const fn = actions[el.dataset.action];
+  if (!fn) return;
+  if (el.tagName === 'A') e.preventDefault();
+  fn(el, e);
+});
+
+document.addEventListener('input', e => {
+  if (e.target.matches('[data-input="conv"]')) updateConverter();
+});
+document.addEventListener('change', e => {
+  if (e.target.matches('[data-input="conv"]')) updateConverter();
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches && e.target.matches('[data-input="add-check"]') && e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault();
+    addCheckItem(e.target.dataset.cat);
+  }
+  if (e.key === 'Escape') {
+    if (!$('#taxiView').classList.contains('hidden')) actions['close-taxi']();
+    else if (sheetCtx) closeSheet();
+  }
+});
+
+$('#importFile').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const json = JSON.parse(await file.text());
+    const trip = json && json.trip ? json.trip : json;
+    if (!trip || typeof trip !== 'object' || (!trip.name && !Array.isArray(trip.days))) throw new Error('invalid');
+    if (!confirm(`นำเข้าทริป "${trip.name || 'ไม่มีชื่อ'}"?\nข้อมูลปัจจุบันจะถูกแทนที่`)) return;
+    state.trip = normalize(trip);
+    state.dayIdx = 0;
+    commit();
+    toast('นำเข้าข้อมูลสำเร็จ');
+  } catch (err) {
+    console.warn(err);
+    toast('ไฟล์ไม่ถูกต้อง ไม่สามารถนำเข้าได้');
+  }
+});
+
+$('#scroller').addEventListener('scroll', onScroll, { passive: true });
+
+/* =========================================================
+   PWA: APP ICON & WEB MANIFEST (generated in-page)
+   ========================================================= */
+function makeIcon(size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#5AC8FA');
+  grad.addColorStop(0.5, '#007AFF');
+  grad.addColorStop(1, '#5856D6');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+
+  g.fillStyle = 'rgba(255,255,255,0.13)';
+  g.beginPath(); g.arc(size * 0.86, size * 0.12, size * 0.36, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.08)';
+  g.beginPath(); g.arc(size * 0.1, size * 0.95, size * 0.3, 0, Math.PI * 2); g.fill();
+
+  g.save();
+  g.translate(size / 2, size / 2);
+  g.rotate(Math.PI / 4);
+  const s = size * 0.6 / 100;
+  g.scale(s, s);
+  g.translate(-50, -50);
+  g.shadowColor = 'rgba(0,0,0,0.25)';
+  g.shadowBlur = 6;
+  g.shadowOffsetY = 2;
+  g.fillStyle = '#FFFFFF';
+  g.beginPath();
+  g.moveTo(46, 14);
+  g.quadraticCurveTo(50, 2, 54, 14);
+  g.lineTo(54, 40); g.lineTo(92, 62); g.lineTo(92, 71); g.lineTo(54, 59);
+  g.lineTo(54, 80); g.lineTo(66, 89); g.lineTo(66, 96); g.lineTo(50, 91);
+  g.lineTo(34, 96); g.lineTo(34, 89); g.lineTo(46, 80); g.lineTo(46, 59);
+  g.lineTo(8, 71); g.lineTo(8, 62); g.lineTo(46, 40);
+  g.closePath();
+  g.fill();
+  g.restore();
+  return c.toDataURL('image/png');
+}
+function setupPWA() {
+  try {
+    const i180 = makeIcon(180), i192 = makeIcon(192), i512 = makeIcon(512);
+    const add = (rel, href, extra = {}) => {
+      const l = document.createElement('link');
+      l.rel = rel; l.href = href;
+      Object.entries(extra).forEach(([k, v]) => l.setAttribute(k, v));
+      document.head.appendChild(l);
+    };
+    add('apple-touch-icon', i180, { sizes: '180x180' });
+    add('icon', i192, { type: 'image/png', sizes: '192x192' });
+    const base = location.href.split('#')[0].split('?')[0];
+    const manifest = {
+      name: 'Personal Travel Planner',
+      short_name: 'TripPlanner',
+      description: 'วางแผนทริป เที่ยวบิน ที่พัก งบประมาณ และเช็กลิสต์',
+      start_url: base,
+      scope: base.replace(/[^/]*$/, ''),
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#F2F2F7',
+      theme_color: '#007AFF',
+      lang: 'th',
+      icons: [
+        { src: i192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: i512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      ]
+    };
+    add('manifest', 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest)));
+  } catch (e) { console.warn('PWA setup failed', e); }
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+function init() {
+  state.trip = loadLocal();
+  if (!localStorage.getItem(LS.trip)) saveLocal();
+
+  const t = state.trip;
+  const today = todayInTz(t.timezone);
+  const idx = diffDays(t.startDate, today);
+  if (idx >= 0 && idx < t.days.length) state.dayIdx = idx;
+
+  applyThemeMeta();
+  setupPWA();
+  setStatus('local');
+  render();
+  onScroll();
+  centerDayStrip(false);
+
+  connectCloud();
+
+  setInterval(updateCountdown, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) updateCountdown(); });
+
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const onScheme = ev => { if (!localStorage.getItem(LS.theme)) setDark(ev.matches, false); };
+  if (mq.addEventListener) mq.addEventListener('change', onScheme);
+  else if (mq.addListener) mq.addListener(onScheme);
+}
+
+init();
+</script>
+</body>
+</html>
